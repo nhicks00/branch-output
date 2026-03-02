@@ -19,7 +19,7 @@ Inspired by the [Source Record](https://github.com/exeldro/obs-source-record) pl
 More reliable and proper audio handling.
 
 - Added “Branch Output” to source or scene effect filters.
-- Up to 10 streams per Branch Output filter can be sent with dedicated encoding settings.
+- Up to 12 streams per Branch Output filter can be sent with dedicated encoding settings.
 - Multiple Branch Outputs can be added to a single source or scene (as PC specs allow)
 - Branch Output Selectable audio source for each filter (filter audio, any source audio, audio tracks 1-6)
 - Automatically reconnects when disconnected

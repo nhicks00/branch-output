@@ -31,7 +31,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "audio/audio-capture.hpp"
 #include "video/filter-video-capture.hpp"
 
-#define MAX_SERVICES 10
+#define MAX_SERVICES 12
 
 class BranchOutputFilter : public QObject {
     Q_OBJECT
