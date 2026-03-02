@@ -767,7 +767,7 @@ OutputTableRow::OutputTableRow(
     buttonsContainer->setLayout(buttonsContainerLayout);
 
     auto resetButton = new QPushButton(QTStr("Reset"), parent);
-    connect(resetButton, &QPushButton::clicked, this, [parent, row]() { parent->outputTableRows[row]->reset(); });
+    connect(resetButton, &QPushButton::clicked, this, [this]() { reset(); });
     resetButton->setProperty("toolButton", true);  // Until OBS 30
     resetButton->setProperty("class", "btn-tool"); // Since OBS 31
     resetButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
@@ -953,10 +953,10 @@ void OutputTableRow::update()
 
     uint64_t bitsBetween = (bytesSent - lastBytesSent) * 8;
     long double timePassed = (long double)(curTime - lastBytesSentTime) / 1000000000.0l;
-    kbps = (long double)bitsBetween / timePassed / 1000.0l;
-
-    if (timePassed < 0.01l) {
+    if (timePassed <= 0.0l || timePassed < 0.01l) {
         kbps = 0.0l;
+    } else {
+        kbps = (long double)bitsBetween / timePassed / 1000.0l;
     }
 
     long double num = (long double)totalBytes / (1024.0l * 1024.0l);

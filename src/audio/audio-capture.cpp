@@ -258,7 +258,8 @@ SourceAudioCapture::~SourceAudioCapture()
         obs_source_remove_audio_capture_callback(source, sourceAudioCallback, this);
     }
 
-    obs_log(LOG_DEBUG, "%s: Source audio capture destroyed.", obs_source_get_name(source));
+    const char *sourceName = source ? obs_source_get_name(source) : "Unknown";
+    obs_log(LOG_DEBUG, "%s: Source audio capture destroyed.", sourceName);
 }
 
 // Callback from obs_source_add_audio_capture_callback
