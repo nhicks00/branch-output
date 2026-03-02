@@ -111,6 +111,19 @@ BranchOutputFilter::BranchOutputFilter(obs_data_t *settings, obs_source_t *sourc
         obs_data_set_int(settings, "audio_track", trackNo);
     }
 
+    // Migrate/normalize service_count.
+    // Legacy settings may not have this key because single-stream mode used only "server"/"key".
+    if (!obs_data_has_user_value(settings, "service_count")) {
+        obs_data_set_int(settings, "service_count", 1);
+    } else {
+        auto serviceCount = obs_data_get_int(settings, "service_count");
+        if (serviceCount < 1) {
+            obs_data_set_int(settings, "service_count", 1);
+        } else if (serviceCount > MAX_SERVICES) {
+            obs_data_set_int(settings, "service_count", MAX_SERVICES);
+        }
+    }
+
     // Migrate streaming_enabled (for pre-existing filters without this key)
     if (!obs_data_has_user_value(settings, "streaming_enabled")) {
         bool hasAnyServer = countEnabledStreamings(settings) > 0;
@@ -402,7 +415,8 @@ obs_data_t *BranchOutputFilter::createRecordingSettings(obs_data_t *settings, bo
     }
 
     // Add filter name to filename format
-    QString sourceName = obs_source_get_name(obs_filter_get_parent(filterSource));
+    obs_source_t *parent = obs_filter_get_parent(filterSource);
+    QString sourceName = parent ? obs_source_get_name(parent) : name;
     QString filterName = qUtf8Printable(name);
     bool noSpace = obs_data_get_bool(settings, "no_space_filename");
     auto re = noSpace ? QRegularExpression("[\\s/\\\\.:;*?\"<>|&$,]") : QRegularExpression("[/\\\\.:;*?\"<>|&$,]");
@@ -499,8 +513,13 @@ void BranchOutputFilter::getSourceResolution(uint32_t &outWidth, uint32_t &outHe
         }
     } else {
         obs_source_t *parent = obs_filter_get_parent(filterSource);
-        outWidth = obs_source_get_width(parent);
-        outHeight = obs_source_get_height(parent);
+        if (parent) {
+            outWidth = obs_source_get_width(parent);
+            outHeight = obs_source_get_height(parent);
+        } else {
+            outWidth = 0;
+            outHeight = 0;
+        }
     }
     // Round up to a multiple of 2
     outWidth += (outWidth & 1);

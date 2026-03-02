@@ -18,7 +18,7 @@
 より信頼性があり、適切なオーディオの取り扱いを行います。
 
 - ソースまたはシーンのエフェクトフィルタに「Branch Output」を追加
-- フィルター1つにつき1本のストリーム送出が、専用のエンコーディング設定で可能
+- フィルター1つにつき最大10本のストリーム送出が、専用のエンコーディング設定で可能
 - 1つのソース・シーンに複数の Branch Output を追加可能（PCのスペックが許す限り追加可能）
 - Branch Output フィルターごとに音声ソースを選択可能（フィルター音声、任意ソース音声、音声トラック1～6）
 - 接続が切れても自動的に再接続
@@ -112,4 +112,3 @@ Branch Output はシーンがアクティブでなくとも配信を行います
 # Development
 
 This plugin is developed under [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate)
-

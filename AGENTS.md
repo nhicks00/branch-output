@@ -104,7 +104,7 @@ The main class is `BranchOutputFilter` (declared in `plugin-main.hpp`), which is
 
 | Area | Description |
 |------|-------------|
-| **Streaming** | Creates up to `MAX_SERVICES` (8) independent streaming outputs with dedicated services, encoders, and reconnect logic. |
+| **Streaming** | Creates up to `MAX_SERVICES` (10) independent streaming outputs with dedicated services, encoders, and reconnect logic. |
 | **Recording** | Supports file recording with various container formats, time/size-based splitting, pause/unpause, and chapter markers. |
 | **Replay Buffer** | Supports replay buffer output (implemented in `plugin-replay-buffer.cpp`). Allows saving the last N seconds of encoded output to file on demand via hotkey or UI button. |
 | **Audio** | Manages up to `MAX_AUDIO_MIXES` audio contexts via `AudioCapture` class. Supports filter audio, per-source audio, and audio track selection. |
@@ -233,7 +233,7 @@ Release tags follow semver: `X.Y.Z` for stable, `X.Y.Z-beta`/`X.Y.Z-rc` for pre-
 
 ### Adding a New Streaming Service Slot
 
-- The plugin supports up to `MAX_SERVICES` (8) service slots.
+- The plugin supports up to `MAX_SERVICES` (10) service slots.
 - Each slot has its own `BranchOutputStreamingContext` with output, service, and signals.
 - Use `getIndexedPropNameFormat()` for indexed property names.
 

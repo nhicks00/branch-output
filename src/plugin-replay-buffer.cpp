@@ -94,7 +94,8 @@ obs_data_t *BranchOutputFilter::createReplayBufferSettings(obs_data_t *settings)
     // TODO: Add filtering for other platforms
 #endif
 
-    QString sourceName = obs_source_get_name(obs_filter_get_parent(filterSource));
+    obs_source_t *parent = obs_filter_get_parent(filterSource);
+    QString sourceName = parent ? obs_source_get_name(parent) : name;
     QString filterName = qUtf8Printable(name);
     bool noSpace = obs_data_get_bool(settings, "replay_buffer_no_space_filename");
     auto re = noSpace ? QRegularExpression("[\\s/\\\\.:;*?\"<>|&$,]") : QRegularExpression("[/\\\\.:;*?\"<>|&$,]");

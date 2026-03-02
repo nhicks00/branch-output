@@ -155,6 +155,7 @@ void BranchOutputFilter::getDefaults(obs_data_t *defaults)
     obs_data_set_default_string(defaults, "audio_encoder", audioEncoderId);
     obs_data_set_default_string(defaults, "video_encoder", videoEncoderId);
     obs_data_set_default_int(defaults, "audio_bitrate", audioBitrate);
+    obs_data_set_default_int(defaults, "service_count", 1);
     obs_data_set_default_bool(defaults, "streaming_enabled", false);
     obs_data_set_default_bool(defaults, "stream_recording", false);
     obs_data_set_default_bool(defaults, "use_profile_recording_path", false);
