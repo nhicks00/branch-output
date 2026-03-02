@@ -1153,12 +1153,28 @@ void BranchOutputFilter::reconnectStreamingOutput(size_t index)
     {
         OBSMutexAutoUnlock locked(&outputMutex);
 
-        if (streamings[index].active) {
-            obs_output_stop(streamings[index].output);
+        if (!streamings[index].output) {
+            return;
+        }
 
-            if (!obs_output_start(streamings[index].output)) {
-                obs_log(LOG_ERROR, "%s (%zu): Reconnect streaming output failed", qUtf8Printable(name), index);
+        bool wasActive = streamings[index].active;
+        if (wasActive && obs_output_active(streamings[index].output)) {
+            obs_output_stop(streamings[index].output);
+        }
+
+        if (obs_output_start(streamings[index].output)) {
+            if (!wasActive) {
+                auto parent = obs_filter_get_parent(filterSource);
+                if (parent) {
+                    obs_source_inc_showing(parent);
+                }
+                streamings[index].active = true;
+                obs_log(
+                    LOG_INFO, "%s (%zu): Starting streaming output retry succeeded", qUtf8Printable(name), index
+                );
             }
+        } else {
+            obs_log(LOG_ERROR, "%s (%zu): Reconnect streaming output failed", qUtf8Printable(name), index);
         }
     }
 }
@@ -1593,9 +1609,9 @@ void BranchOutputFilter::onIntervalTimerTimeout()
             }
 
             for (size_t i = 0; i < MAX_SERVICES; i++) {
-                if (streamings[i].active && streamings[i].output && !obs_output_active(streamings[i].output) &&
+                if (streamings[i].output && !streamings[i].outputStarting && !obs_output_active(streamings[i].output) &&
                     !obs_output_reconnecting(streamings[i].output)) {
-                    // Restart streaming
+                    // Retry streaming output (covers both reconnect and initial start failures).
                     obs_log(LOG_INFO, "%s (%zu): Attempting reactivate the streaming output", qUtf8Printable(name), i);
                     reconnectStreamingOutput(i);
                 }
