@@ -729,6 +729,7 @@ void BranchOutputFilter::startStreamingOutput(size_t index)
         }
         obs_log(LOG_INFO, "%s (%zu): Starting streaming output succeeded", qUtf8Printable(name), index);
     } else {
+        streamings[index].outputStarting = false;
         obs_log(LOG_ERROR, "%s (%zu): Starting streaming output failed", qUtf8Printable(name), index);
     }
 }
@@ -907,6 +908,11 @@ void BranchOutputFilter::startOutput(obs_data_t *settings)
         //--- Create service and open streaming output ---//
         if (isStreamingGroupEnabled(settings)) {
             auto serviceCount = (size_t)obs_data_get_int(settings, "service_count");
+            if (serviceCount < 1) {
+                serviceCount = 1;
+            } else if (serviceCount > MAX_SERVICES) {
+                serviceCount = MAX_SERVICES;
+            }
             for (size_t i = 0; i < MAX_SERVICES && i < serviceCount; i++) {
                 streamings[i] = createSreamingOutput(settings, i);
             }
@@ -934,6 +940,10 @@ void BranchOutputFilter::startOutput(obs_data_t *settings)
                 obs_log(LOG_ERROR, "%s: Video output association failed", qUtf8Printable(name));
                 delete filterVideoCapture;
                 filterVideoCapture = nullptr;
+                obs_view_set_source(view, 0, nullptr);
+                obs_view_remove(view);
+                view = nullptr;
+                videoOutput = nullptr;
                 return;
             }
             filterVideoCapture->setActive(true);
@@ -945,6 +955,10 @@ void BranchOutputFilter::startOutput(obs_data_t *settings)
             videoOutput = obs_view_add2(view, &ovi);
             if (!videoOutput) {
                 obs_log(LOG_ERROR, "%s: Video output association failed", qUtf8Printable(name));
+                obs_view_set_source(view, 0, nullptr);
+                obs_view_remove(view);
+                view = nullptr;
+                videoOutput = nullptr;
                 return;
             }
         }
@@ -1141,7 +1155,14 @@ void BranchOutputFilter::startOutput(obs_data_t *settings)
         }
 
         //--- Start streaming output (if requested) ---//
-        for (size_t i = 0; i < MAX_SERVICES; i++) {
+        auto serviceCount = (size_t)obs_data_get_int(settings, "service_count");
+        if (serviceCount < 1) {
+            serviceCount = 1;
+        } else if (serviceCount > MAX_SERVICES) {
+            serviceCount = MAX_SERVICES;
+        }
+
+        for (size_t i = 0; i < MAX_SERVICES && i < serviceCount; i++) {
             startStreamingOutput(i);
         }
     }
@@ -1454,11 +1475,11 @@ void BranchOutputFilter::onIntervalTimerTimeout()
 
     } else {
         // Evaluate stop or restart condition
-        auto streamingAlive = countAliveStreamings() > 0;
-        auto recordingAlive = recordingOutput && obs_output_active(recordingOutput);
+            auto streamingAlive = countAliveStreamings() > 0;
+            auto recordingAlive = recordingOutput && obs_output_active(recordingOutput);
 
-        if (sourceEnabled) {
-            if (someStreamingsStarting()) {
+            if (sourceEnabled) {
+                if (someStreamingsStarting()) {
                 return;
             }
 
@@ -1466,11 +1487,11 @@ void BranchOutputFilter::onIntervalTimerTimeout()
             bool blankWhenHidden = obs_data_get_bool(settings, "blank_when_not_visible");
             bool muteWhenHidden = obs_data_get_bool(settings, "mute_audio_when_blank");
 
-            // Check interlock condition
-            if (interlockType == INTERLOCK_TYPE_ALWAYS_OFF) {
-                // Always OFF: Stop output immediately
-                onStopOutputGracefully();
-                return;
+                // Check interlock condition
+                if (interlockType == INTERLOCK_TYPE_ALWAYS_OFF) {
+                    // Always OFF: Stop output immediately
+                    onStopOutputGracefully();
+                    return;
             } else if (interlockType == INTERLOCK_TYPE_STREAMING) {
                 if (!obs_frontend_streaming_active()) {
                     // Stop output when streaming is not active
@@ -1608,7 +1629,14 @@ void BranchOutputFilter::onIntervalTimerTimeout()
                 restartRecordingOutput();
             }
 
-            for (size_t i = 0; i < MAX_SERVICES; i++) {
+            auto serviceCount = (size_t)obs_data_get_int(settings, "service_count");
+            if (serviceCount < 1) {
+                serviceCount = 1;
+            } else if (serviceCount > MAX_SERVICES) {
+                serviceCount = MAX_SERVICES;
+            }
+
+            for (size_t i = 0; i < MAX_SERVICES && i < serviceCount; i++) {
                 if (streamings[i].output && !streamings[i].outputStarting && !obs_output_active(streamings[i].output) &&
                     !obs_output_reconnecting(streamings[i].output)) {
                     // Retry streaming output (covers both reconnect and initial start failures).
