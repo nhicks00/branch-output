@@ -851,9 +851,7 @@ void BranchOutputFilter::addAudioGroup(obs_properties_t *props)
 
             // Show/hide multitrack_audio checkbox
             obs_property_set_visible(obs_properties_get(groupContent, "multitrack_audio"), customAudio);
-            obs_property_set_visible(
-                obs_properties_get(groupContent, "keep_selected_source_audio_active"), customAudio
-            );
+            obs_property_set_visible(obs_properties_get(groupContent, "keep_selected_source_audio_active"), customAudio);
 
             updateAudioTrackVisibility(groupContent, customAudio, _multitrackAudio);
 
