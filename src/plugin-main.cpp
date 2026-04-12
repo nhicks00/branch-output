@@ -496,6 +496,7 @@ bool BranchOutputFilter::ensureInfrastructure(obs_data_t *settings)
     if (obs_data_get_bool(settings, "custom_audio_source")) {
         // Apply custom audio source
         bool multitrack = obs_data_get_bool(settings, "multitrack_audio");
+        bool keepSelectedSourceAudioActive = obs_data_get_bool(settings, "keep_selected_source_audio_active");
 
         for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
             auto audioContext = &audios[i];
@@ -579,7 +580,9 @@ bool BranchOutputFilter::ensureInfrastructure(obs_data_t *settings)
                     LOG_INFO, "%s: Use %s audio for track %d", qUtf8Printable(name), obs_source_get_name(source), track
                 );
 
-                audioContext->capture = new SourceAudioCapture(source, ai.samples_per_sec, ai.speakers, this);
+                audioContext->capture = new SourceAudioCapture(
+                    source, ai.samples_per_sec, ai.speakers, keepSelectedSourceAudioActive, this
+                );
                 audioContext->audio = audioContext->capture->getAudio();
                 audioContext->name = audioContext->capture->getName();
             }
@@ -810,6 +813,7 @@ void BranchOutputFilter::loadRecently(obs_data_t *settings)
         obs_data_erase(recently_settings, "streaming_enabled");
         obs_data_erase(recently_settings, "replay_buffer");
         obs_data_erase(recently_settings, "custom_audio_source");
+        obs_data_erase(recently_settings, "keep_selected_source_audio_active");
         obs_data_erase(recently_settings, "multitrack_audio");
 
         for (size_t n = 1; n <= MAX_AUDIO_MIXES; n++) {

@@ -67,6 +67,7 @@ Please download latest install package from [Release](https://github.com/OPENSPH
    must has custom audio source for it's sound)
 
    "Any Sources" will be captured after filter pipeline before Audio Mixer. Also "Audio track 1 ~ 6" will be captured from Audio Mixer output.  
+   If a selected source should continue feeding audio while its scene is off-program, enable "Keep selected source audio active" in the custom audio section. This can replace a separate keep-alive scene in many setups.
    
    You can choose "No Audio" as well.  
    
@@ -124,4 +125,3 @@ See the [API reference](./API.md) for procedure signatures, sample code, and usa
 # Development
 
 This plugin is developed under [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate)
-

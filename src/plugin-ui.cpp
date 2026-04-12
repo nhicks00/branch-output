@@ -161,6 +161,7 @@ void BranchOutputFilter::getDefaults(obs_data_t *defaults)
     obs_data_set_default_string(defaults, "audio_source", "master_track");
     obs_data_set_default_int(defaults, "audio_track", 1);
     obs_data_set_default_string(defaults, "audio_dest", "both");
+    obs_data_set_default_bool(defaults, "keep_selected_source_audio_active", false);
     obs_data_set_default_string(defaults, "audio_source_2", "disabled");
     obs_data_set_default_int(defaults, "audio_track_2", 1);
     obs_data_set_default_string(defaults, "audio_dest_2", "both");
@@ -803,6 +804,13 @@ void BranchOutputFilter::addAudioGroup(obs_properties_t *props)
 
     createAudioTrackProperties(audioGroup, 1);
 
+    auto keepSelectedSourceAudioActive = obs_properties_add_bool(
+        audioGroup, "keep_selected_source_audio_active", obs_module_text("KeepSelectedSourceAudioActive")
+    );
+    obs_property_set_long_description(
+        keepSelectedSourceAudioActive, obs_module_text("KeepSelectedSourceAudioActiveNote")
+    );
+
     auto multitrackAudio = obs_properties_add_bool(audioGroup, "multitrack_audio", obs_module_text("MultitrackAudio"));
 
     for (size_t track = 2; track <= MAX_AUDIO_MIXES; track++) {
@@ -843,6 +851,9 @@ void BranchOutputFilter::addAudioGroup(obs_properties_t *props)
 
             // Show/hide multitrack_audio checkbox
             obs_property_set_visible(obs_properties_get(groupContent, "multitrack_audio"), customAudio);
+            obs_property_set_visible(
+                obs_properties_get(groupContent, "keep_selected_source_audio_active"), customAudio
+            );
 
             updateAudioTrackVisibility(groupContent, customAudio, _multitrackAudio);
 
