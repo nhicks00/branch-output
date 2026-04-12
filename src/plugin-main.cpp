@@ -1092,16 +1092,15 @@ void BranchOutputFilter::onIntervalTimerTimeout()
                 if (streamingIndividualStopping) {
                     return false;
                 }
-                bool anyStarted = false;
                 for (size_t i = 0; i < MAX_SERVICES; i++) {
                     if (isStreamingUserEnabled(i) && !streamings[i].active && isStreamingEnabled(settings, i) &&
                         isStreamingGroupEnabled(settings)) {
                         if (startSingleStreamingIndividual(i)) {
-                            anyStarted = true;
+                            return true;
                         }
                     }
                 }
-                return anyStarted;
+                return false;
             };
             bool blankWhenHidden = obs_data_get_bool(settings, "blank_when_not_visible");
             bool muteWhenHidden = obs_data_get_bool(settings, "mute_audio_when_blank");
@@ -1370,8 +1369,8 @@ void BranchOutputFilter::onIntervalTimerTimeout()
             for (size_t i = 0; i < MAX_SERVICES; i++) {
                 if (streamings[i].active && streamings[i].output && !obs_output_active(streamings[i].output) &&
                     !obs_output_reconnecting(streamings[i].output)) {
-                    // Restart streaming
-                    obs_log(LOG_INFO, "%s (%zu): Attempting reactivate the streaming output", qUtf8Printable(name), i);
+                    // OBS has stopped reconnecting for this output; the streaming helper
+                    // schedules a staggered reactivation and attempts it when due.
                     reconnectStreamingOutput(i);
                 }
             }

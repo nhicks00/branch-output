@@ -76,6 +76,8 @@ class BranchOutputFilter : public QObject {
         OBSOutputAutoRelease output;
         OBSServiceAutoRelease service;
         std::atomic<uint64_t> reconnectAttemptingAt{0};
+        std::atomic<uint64_t> reactivateAt{0};
+        std::atomic<uint32_t> reactivateAttempts{0};
         std::atomic<bool> outputStarting{false};
         bool active = false;
         bool stopping = false;
@@ -224,6 +226,9 @@ class BranchOutputFilter : public QObject {
     bool isStreamingGroupEnabled(obs_data_t *settings);
     bool isStreamingEnabled(obs_data_t *settings, size_t index = 0);
     bool stopSingleStreamingOutputGracefully(size_t index);
+    uint64_t getStreamingReactivateDelayNs(size_t index, uint32_t attempt) const;
+    void scheduleStreamingReactivate(size_t index, const char *reason);
+    void clearStreamingReactivate(size_t index, bool resetAttempts = true);
 
     // Implemented in plugin-stream-recording.cpp
     obs_data_t *createRecordingSettings(obs_data_t *settings, bool createFolder = false);

@@ -27,9 +27,65 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #define FTL_PROTOCOL "ftl"
 #define RTMP_PROTOCOL "rtmp"
-#define OUTPUT_MAX_RETRIES 7
-#define OUTPUT_RETRY_DELAY_SECS 1
+#define OUTPUT_MAX_RETRIES 20
+#define OUTPUT_RETRY_DELAY_SECS 2
 #define RECONNECT_ATTEMPTING_TIMEOUT_NS 2000000000ULL
+#define REACTIVATE_BASE_DELAY_NS 2000000000ULL
+#define REACTIVATE_SLOT_STAGGER_NS 1000000000ULL
+#define REACTIVATE_MAX_DELAY_NS 30000000000ULL
+
+static void applyFrontendStreamingOutputSettings(obs_data_t *outputSettings)
+{
+    auto config = obs_frontend_get_profile_config();
+    if (!config || !outputSettings) {
+        return;
+    }
+
+    auto bindIp = config_get_string(config, "Output", "BindIP");
+    if (bindIp && *bindIp) {
+        obs_data_set_string(outputSettings, "bind_ip", bindIp);
+    }
+
+    auto ipFamily = config_get_string(config, "Output", "IPFamily");
+    if (ipFamily && *ipFamily) {
+        obs_data_set_string(outputSettings, "ip_family", ipFamily);
+    }
+
+    obs_data_set_bool(outputSettings, "dyn_bitrate", config_get_bool(config, "Output", "DynamicBitrate"));
+
+#ifdef _WIN32
+    obs_data_set_bool(
+        outputSettings, "new_socket_loop_enabled", config_get_bool(config, "Output", "NewSocketLoopEnable")
+    );
+    obs_data_set_bool(outputSettings, "low_latency_mode_enabled", config_get_bool(config, "Output", "LowLatencyEnable"));
+#endif
+}
+
+static void getFrontendReconnectSettings(int &retryCount, int &retryDelaySecs)
+{
+    retryCount = OUTPUT_MAX_RETRIES;
+    retryDelaySecs = OUTPUT_RETRY_DELAY_SECS;
+
+    auto config = obs_frontend_get_profile_config();
+    if (!config) {
+        return;
+    }
+
+    if (!config_get_bool(config, "Output", "Reconnect")) {
+        retryCount = 0;
+        return;
+    }
+
+    auto configuredRetryDelay = (int)config_get_int(config, "Output", "RetryDelay");
+    if (configuredRetryDelay > 0) {
+        retryDelaySecs = configuredRetryDelay;
+    }
+
+    auto configuredMaxRetries = (int)config_get_int(config, "Output", "MaxRetries");
+    if (configuredMaxRetries >= 0) {
+        retryCount = configuredMaxRetries;
+    }
+}
 
 obs_data_t *BranchOutputFilter::createStreamingSettings(obs_data_t *settings, size_t index)
 {
@@ -57,6 +113,8 @@ obs_data_t *BranchOutputFilter::createStreamingSettings(obs_data_t *settings, si
             streamingSettings, "password", obs_data_get_string(settings, qUtf8Printable(propNameFormat.arg("password")))
         );
     }
+
+    applyFrontendStreamingOutputSettings(streamingSettings);
 
     return streamingSettings;
 }
@@ -97,7 +155,10 @@ bool BranchOutputFilter::createStreamingOutput(obs_data_t *settings, size_t inde
         obs_log(LOG_ERROR, "%s (%zu): Streaming output creation failed", qUtf8Printable(name), index);
         return false;
     }
-    obs_output_set_reconnect_settings(ctx.output, OUTPUT_MAX_RETRIES, OUTPUT_RETRY_DELAY_SECS);
+    int retryCount;
+    int retryDelaySecs;
+    getFrontendReconnectSettings(retryCount, retryDelaySecs);
+    obs_output_set_reconnect_settings(ctx.output, retryCount, retryDelaySecs);
     obs_output_set_service(ctx.output, ctx.service);
 
     return true;
@@ -159,6 +220,9 @@ void BranchOutputFilter::startStreamingOutput(size_t index)
         [](void *_data, calldata_t *) {
             auto context = static_cast<BranchOutputStreamingContext *>(_data);
             context->outputStarting = false;
+            context->reconnectAttemptingAt = 0;
+            context->reactivateAt = 0;
+            context->reactivateAttempts = 0;
             obs_log(LOG_DEBUG, "%s: Streaming output has activated", obs_output_get_name(context->output));
         },
         &streamings[index]
@@ -169,7 +233,9 @@ void BranchOutputFilter::startStreamingOutput(size_t index)
         obs_output_get_signal_handler(streamings[index].output), "reconnect",
         [](void *_data, calldata_t *) {
             auto context = static_cast<BranchOutputStreamingContext *>(_data);
+            context->outputStarting = false;
             context->reconnectAttemptingAt = os_gettime_ns();
+            context->reactivateAt = 0;
             obs_log(LOG_DEBUG, "%s: Streaming output is reconnecting", obs_output_get_name(context->output));
         },
         &streamings[index]
@@ -198,6 +264,7 @@ void BranchOutputFilter::startStreamingOutput(size_t index)
         }
         obs_log(LOG_INFO, "%s (%zu): Starting streaming output succeeded", qUtf8Printable(name), index);
     } else {
+        streamings[index].outputStarting = false;
         obs_log(LOG_ERROR, "%s (%zu): Starting streaming output failed", qUtf8Printable(name), index);
     }
 }
@@ -222,6 +289,8 @@ void BranchOutputFilter::stopStreamingOutput(size_t index)
     streamings[index].output = nullptr;
     streamings[index].service = nullptr;
     streamings[index].reconnectAttemptingAt = 0;
+    streamings[index].reactivateAt = 0;
+    streamings[index].reactivateAttempts = 0;
     streamings[index].outputStarting = false;
     streamings[index].active = false;
     streamings[index].stopping = false;
@@ -233,12 +302,44 @@ void BranchOutputFilter::reconnectStreamingOutput(size_t index)
     {
         OBSMutexAutoUnlock locked(&outputMutex);
 
-        if (streamings[index].active) {
-            obs_output_stop(streamings[index].output);
+        if (index >= MAX_SERVICES) {
+            return;
+        }
 
-            if (!obs_output_start(streamings[index].output)) {
-                obs_log(LOG_ERROR, "%s (%zu): Reconnect streaming output failed", qUtf8Printable(name), index);
-            }
+        auto &ctx = streamings[index];
+        if (!ctx.active || !ctx.output) {
+            clearStreamingReactivate(index);
+            return;
+        }
+
+        if (obs_output_active(ctx.output) || obs_output_reconnecting(ctx.output) || ctx.outputStarting) {
+            return;
+        }
+
+        auto reactivateAt = ctx.reactivateAt.load();
+        auto now = os_gettime_ns();
+        if (!reactivateAt) {
+            scheduleStreamingReactivate(index, "output inactive after OBS reconnect attempts");
+            return;
+        }
+
+        if (now < reactivateAt) {
+            return;
+        }
+
+        ctx.reactivateAt = 0;
+        ctx.outputStarting = true;
+
+        auto attempt = ctx.reactivateAttempts.load();
+        obs_log(
+            LOG_INFO, "%s (%zu): Attempting streaming output reactivation (attempt %u)", qUtf8Printable(name), index,
+            attempt
+        );
+
+        if (!obs_output_start(ctx.output)) {
+            ctx.outputStarting = false;
+            scheduleStreamingReactivate(index, "reactivation start failed");
+            obs_log(LOG_WARNING, "%s (%zu): Streaming output reactivation start failed", qUtf8Printable(name), index);
         }
     }
 }
@@ -247,6 +348,66 @@ bool BranchOutputFilter::reconnectAttemptingTimedOut(size_t index)
 {
     auto attemptingAt = streamings[index].reconnectAttemptingAt.load();
     return attemptingAt && os_gettime_ns() - attemptingAt > RECONNECT_ATTEMPTING_TIMEOUT_NS;
+}
+
+uint64_t BranchOutputFilter::getStreamingReactivateDelayNs(size_t index, uint32_t attempt) const
+{
+    uint64_t delayNs = REACTIVATE_BASE_DELAY_NS;
+
+    for (uint32_t i = 0; i < attempt; i++) {
+        if (delayNs >= REACTIVATE_MAX_DELAY_NS / 2) {
+            delayNs = REACTIVATE_MAX_DELAY_NS;
+            break;
+        }
+
+        delayNs *= 2;
+    }
+
+    uint64_t staggerNs = index * REACTIVATE_SLOT_STAGGER_NS;
+    if (staggerNs >= REACTIVATE_MAX_DELAY_NS || delayNs >= REACTIVATE_MAX_DELAY_NS - staggerNs) {
+        return REACTIVATE_MAX_DELAY_NS;
+    }
+
+    return delayNs + staggerNs;
+}
+
+void BranchOutputFilter::scheduleStreamingReactivate(size_t index, const char *reason)
+{
+    if (index >= MAX_SERVICES) {
+        return;
+    }
+
+    auto &ctx = streamings[index];
+    if (!ctx.active || !ctx.output) {
+        clearStreamingReactivate(index);
+        return;
+    }
+
+    if (ctx.reactivateAt.load()) {
+        return;
+    }
+
+    auto attempt = ctx.reactivateAttempts.fetch_add(1) + 1;
+    auto delayNs = getStreamingReactivateDelayNs(index, attempt - 1);
+    auto reactivateAt = os_gettime_ns() + delayNs;
+    ctx.reactivateAt = reactivateAt;
+
+    obs_log(
+        LOG_INFO, "%s (%zu): Scheduling streaming output reactivation in %.2f seconds (attempt %u, reason=%s)",
+        qUtf8Printable(name), index, (double)delayNs / 1000000000.0, attempt, reason ? reason : "unspecified"
+    );
+}
+
+void BranchOutputFilter::clearStreamingReactivate(size_t index, bool resetAttempts)
+{
+    if (index >= MAX_SERVICES) {
+        return;
+    }
+
+    streamings[index].reactivateAt = 0;
+    if (resetAttempts) {
+        streamings[index].reactivateAttempts = 0;
+    }
 }
 
 void BranchOutputFilter::setStreamingUserEnabled(size_t index, bool enabled)
@@ -375,9 +536,15 @@ bool BranchOutputFilter::createAndStartStreamingOutputs(obs_data_t *settings)
         }
     }
 
+    // Start one destination per timer cycle so multi-destination sessions do not
+    // burst a set of RTMP connects all at once.
     for (size_t i = 0; i < MAX_SERVICES; i++) {
-        if (streamings[i].output) {
+        if (streamings[i].output && !streamings[i].active) {
             startStreamingOutput(i);
+
+            if (streamings[i].active || streamings[i].outputStarting) {
+                break;
+            }
         }
     }
 
