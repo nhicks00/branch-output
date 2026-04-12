@@ -242,11 +242,16 @@ bool AudioCapture::silenceCapture(void *, uint64_t startTsIn, uint64_t, uint64_t
 //--- SourceAudioCapture class ---//
 
 SourceAudioCapture::SourceAudioCapture(
-    obs_source_t *source, uint32_t _samplesPerSec, speaker_layout _speakers, QObject *parent
+    obs_source_t *source, uint32_t _samplesPerSec, speaker_layout _speakers, bool _keepSourceActive, QObject *parent
 )
     : AudioCapture(obs_source_get_name(source), _samplesPerSec, _speakers, AudioCapture::audioCapture, parent),
-      weakSource(obs_source_get_weak_source(source))
+      weakSource(obs_source_get_weak_source(source)),
+      keepSourceActive(_keepSourceActive)
 {
+    if (keepSourceActive) {
+        obs_source_inc_active(source);
+    }
+
     obs_source_add_audio_capture_callback(source, sourceAudioCallback, this);
     obs_log(LOG_DEBUG, "%s: Source audio capture created.", obs_source_get_name(source));
 }
@@ -256,6 +261,9 @@ SourceAudioCapture::~SourceAudioCapture()
     OBSSourceAutoRelease source = obs_weak_source_get_source(weakSource);
     if (source) {
         obs_source_remove_audio_capture_callback(source, sourceAudioCallback, this);
+        if (keepSourceActive) {
+            obs_source_dec_active(source);
+        }
     }
 
     obs_log(LOG_DEBUG, "%s: Source audio capture destroyed.", obs_source_get_name(source));

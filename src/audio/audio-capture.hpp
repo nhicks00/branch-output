@@ -83,12 +83,14 @@ class SourceAudioCapture : public AudioCapture {
     Q_OBJECT
 
     OBSWeakSourceAutoRelease weakSource;
+    bool keepSourceActive;
 
     static void sourceAudioCallback(void *param, obs_source_t *, const audio_data *audioData, bool muted);
 
 public:
     explicit SourceAudioCapture(
-        obs_source_t *source, uint32_t _samplesPerSec, speaker_layout _speakers, QObject *parent = nullptr
+        obs_source_t *source, uint32_t _samplesPerSec, speaker_layout _speakers, bool _keepSourceActive = false,
+        QObject *parent = nullptr
     );
     ~SourceAudioCapture();
 };

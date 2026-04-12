@@ -36,12 +36,18 @@ More reliable and proper audio handling.
 - Filter input mode to capture and output video from the filter chain (Experimental, Since 1.0.8)
 - Blanking and muting when the source is not visible in the program output (Since 1.0.8)
 - Per-profile Status Dock settings (Since 1.0.8)
+- Video cropping with relative (margin) and absolute (region) modes, including a live preview rectangle (Since 1.0.9)
+- Frame rate divider to reduce output frame rate (1/2, 1/3, 1/4, 1/5, 1/6) (Since 1.0.9)
+- Individual start/stop control per output type via "Individual" interlock mode and per-output enable/disable checkboxes in the Status Dock (Since 1.0.9)
+- Proc handler to override recording save file name format from scripts ([API reference](./API.md)) (Since 1.0.9)
+- Proc handler to override replay buffer save file name format from scripts ([API reference](./API.md)) (Since 1.0.9)
 - Various hotkeys
   - Enable/Disable the filter
   - Manual recording splitting, Pause/Unpause, Adding chapters (Since 1.0.5)
   - Enable/Disable all
   - Split all recordings, Pause/Unpause all recordings, Add chapter to all reacordings (Since 1.0.5)
   - Save replay buffer, Save all replay buffers (Since 1.0.8)
+  - Per-output enable/disable for streaming (all slots / per-slot), recording, and replay buffer (Since 1.0.9)
 - Also available in Studio Mode
   - **Branch Output ignore studio mode's program out and always outputs preview's one**
 
@@ -61,6 +67,7 @@ Please download latest install package from [Release](https://github.com/OPENSPH
    must has custom audio source for it's sound)
 
    "Any Sources" will be captured after filter pipeline before Audio Mixer. Also "Audio track 1 ~ 6" will be captured from Audio Mixer output.  
+   If a selected source should continue feeding audio while its scene is off-program, enable "Keep selected source audio active" in the custom audio section. This can replace a separate keep-alive scene in many setups.
    
    You can choose "No Audio" as well.  
    
@@ -107,7 +114,14 @@ For example, you might want to display Twitch comments on Twitch and YouTube com
 
 However, this method adds sources but does not reduce them.
 
+## 3. To dynamically override recording / replay buffer filenames
+
+Branch Output exposes public procedures that let external scripts override the stream recording and replay buffer save filename formats at runtime. This is useful when you want filenames to reflect the current scene, a text input value, or other external data for organized file output.
+
+Sample Python scripts (`recording-filename-from-text.py` and `replay-buffer-filename-from-text.py`) are bundled with the plugin and can be loaded from OBS Tools → Scripts.
+
+See the [API reference](./API.md) for procedure signatures, sample code, and usage instructions for the bundled scripts.
+
 # Development
 
 This plugin is developed under [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate)
-
